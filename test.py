@@ -1,6 +1,6 @@
 from pickle import FALSE
 from flask import Flask, request, jsonify
-from util_methods import register_service, get_ports_of_nodes, generate_node_id, get_higher_nodes, election, announce, ready_for_election, get_details, check_health_of_the_service, generate_shedule,workloaddevide,read_password_file,broadcastFound
+from util_methods import register_service, get_ports_of_nodes, generate_node_id, get_higher_nodes, election, announce, ready_for_election, get_details, check_health_of_the_service, generate_shedule,workloaddevide,read_password_file,broadcastFound,get_node_ports
 from bully import Bully
 import threading
 import time
@@ -17,6 +17,9 @@ from ast import literal_eval
 import asyncio
 import websockets
 import socket
+import logging, logging.handlers
+import json
+import os
 
 counter = Value('i', 0)
 app = Flask(__name__)
@@ -33,12 +36,56 @@ assert node_name
 
 # saving the API logs to a file
 logging.basicConfig(filename=f"logs/{node_name}.log", level=logging.INFO)
+print("saaaaaaaaaaaaaaaaaaa",logging.INFO)
+url = 'http://localhost:5009/logDetails'
+print(url)
+# print(node_name)
+requests.post(url, json=node_name)
+
+# # Import logging.handlers module
+# import logging.handlers
+# # Create the demo handler
+# demoHandler = logging.handlers.HTTPHandler('http://localhost:5009/logDetails', '', method= 'POST')
+# logger = logging.getLogger()
+# # Add the handler we created
+# log = logger.addHandler(demoHandler)
+# # Emit a log message
+# logger.warning("Warning Message!")
+
+import logging.handlers
+logger = logging.getLogger('Synchronous Logging')
+http_handler = logging.handlers.HTTPHandler(
+    '127.0.0.1:5009',
+    '/logDetails',
+    method='POST',
+)
+logger.addHandler(http_handler)
+
+# Log messages:
+# logger.warn('Hey log a warning')
+# logger.error("Hey log a error")
+
+#logging.basicConfig(filename=f"logs/{node_name}.log", level=logging.INFO)
+
+
+
+class myHTTPHandler(logging.handlers.HTTPHandler):
+  def mapLogRecord(self,record):
+    print("record is sss",record)
+    trec={'record':json.dumps(record.__dict__),'filename': json.dumps(node_name)}
+    #trec={'filename': json.dumps(node_name)}
+    return trec
+
+myLogger = logging.getLogger('MTEST')
+myLogger.setLevel(logging.INFO)
+httpHandler = myHTTPHandler('localhost:5009',url='/logDetails',method="POST")
+myLogger.addHandler(httpHandler)
 
 # an array to capture the messages that receive from acceptors
 learner_result_array = []
 
 node_id = generate_node_id()
-print(node_id);
+print(node_id)
 bully = Bully(node_name, node_id, port_number)
 
 # register service in the Service Registry
@@ -46,92 +93,161 @@ service_register_status = register_service(node_name, port_number, node_id)
 
 print("SRS",service_register_status)
 
+async def handler(websocket, path):
+        
+        print('HIIIcc in in test1')
+        fruits = ["apple", "banana", "cherry"]
+        data = await websocket.recv()
+        r=6
+        combination=(permutations(data, r))
 
-# def startse():
-#     print("okkkk")
-#     startserver()
-    
- 
+        for x in combination:
+            #time.sleep(4)
+            s = str(x)
+            valpass=s.replace(', ', '').replace('(', '').replace(')', '').replace("'", '')
+            reply=[]
+            #print("node name is ...................................", bully.node_name)
+            reply.append("node 1")
+            reply.append(valpass)
+            # reply[1]=valpass
+            #reply = f"{valpass}"
+            #print(reply)
+            
+            await websocket.send(f"{reply}")
+
+        asyncio.get_event_loop().stop()
+
+      
+async def testa():
+    async with websockets.serve(handler, "localhost", 8001):
+        await asyncio.Future()  # run forever
+        #await asyncio.get_event_loop().run_forever()
+   
+@app.route('/startserver', methods=['GET'])
+def startserver():
+
+    print("I am here in test1")
+    asyncio.run(testa())
+
+async def send_message(server_uri, message, password, termination_flag):
+    async with websockets.connect(server_uri,ping_timeout=300) as websocket:
+        await websocket.send(message)
+        print(f"Sending message '{message}' to {server_uri}")
+
+        while True:
+            response = await websocket.recv()
+            print(f"Received message from {server_uri}: {response}")
+
+            # Check the condition within the send_message function
+            if literal_eval(response)[1] == password:
+                print("Paaword Fx !!!:", password)
+                #broadcastFound(literal_eval(message)[0])
+                termination_flag[0] = True
+                return server_uri, response  # Include server_uri in the response
+
+            if termination_flag[0]:
+                # Terminate the inner loop if termination_flag is True
+                break
+
+        
+# Send schedules to all the nodes
 async def testwebsoc(shecu,node_name,passwords):
 
-    print("I am here ckient loop")
-    #startserver()
-  
-    port="8002"
-    url = 'ws://127.0.0.1:8002'
-    print(url)
-    print("set of password is",passwords)
-    keyval=0
-    for passval in range(len(passwords)):
-        print("I started the next loop")
-        time.sleep(10)
-        passwords_value= passwords[keyval]
-        async with websockets.connect(url) as websocket:
-            schedule = shecu
-            print("asddd",schedule[0])
-            indica=True
-            await websocket.send(schedule[0])
-            indi=True
-            
-            
-            while indi==True:
-                
-                response = await websocket.recv()
-                #print(response)
-                #jsonString = json.dumps(dictionary, indent=4)
-                #print("sasasasasas",jsonString)
-                print(literal_eval(response)[1])
-                if (literal_eval(response)[1]) == passwords_value:
-                    keyval=keyval+1
-                    print("Password Has Found !!!!")
-                    print("Password Has Found By ",literal_eval(response)[0],"!!!!!!")
-                    broadcastFound(literal_eval(response)[0])
-                    #asyncio.get_event_loop().stop()
-                    indi=FALSE
-                    break
-                else:
-                    print("Password Doesnot matched")
-                # if response=="2C1Dbd" :
-                #     print("Foundddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
-                    ###########asyncio.get_event_loop().stop()
-                # if(response==""):
-                #     indi=False
-            #asyncio.get_event_loop().stop()    
-    print("Exit the password matching process !!!")
+    ports_of_all_nodes = get_ports_of_nodes()
+    node_details = get_details(ports_of_all_nodes)
+    allports=get_node_ports(node_details)
+    allports.remove(port_number)
 
-#startserver()    
+    servers = []
+    messages = []
+    # tasks = []
+    # stop_flag = False
+    for allport in allports: 
+       
+        url = 'ws://127.0.0.1:'+str(allport+3000)
+        print("socket open url is"+url)
+        servers.append(url)
+
+    print("set of servrss",servers)
+    print("I am here ckient loop 1",shecu)
+    keyval=0
+    for singlesche in range(len(shecu)): 
+        messages.append(shecu[keyval])
+        keyval=keyval+1
+
+    random.shuffle(servers)  # Randomly shuffle the servers list
+
+    outer_termination_flag = [False]  # Flag to control the termination of the outer loop
+
+    for password in passwords:
+        termination_flag = [False]  # Flag to control the termination of the inner loop
+        tasks = []
+
+        while True:
+            for server_uri, message in zip(servers, messages):
+                task = asyncio.create_task(send_message(server_uri, message, password, termination_flag))
+                tasks.append(task)
+
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Shuffle the responses before processing
+            random.shuffle(responses)
+
+            # Process the shuffled responses
+            inner_termination_flag = False
+            for response in responses:
+                if response is not None and not isinstance(response, Exception):
+                    server_uri, response = response
+                    print(f"Received message from {server_uri}: {response}")
+                    # Do something with the response
+
+                    # Check if the condition is met
+                    if literal_eval(response)[1] == password:
+                       # print("Password Found !!!:", password)
+                        tasks.clear()  # Clear the previous tasks
+                        termination_flag[0] = False  # Reset the termination flag for the inner loop
+                        inner_termination_flag = True  # Set the flag to indicate termination of the inner loop
+                        break  # Exit the inner loop and start from the beginning of the outer loop
+
+            if inner_termination_flag:
+                # Terminate the inner loop and move to the next iteration of the outer loop
+                break
+
+            if outer_termination_flag[0]:
+                # Terminate the outer loop if outer_termination_flag is True
+                break
+
+        if outer_termination_flag[0]:
+            # Break the outer loop if outer_termination_flag is True
+            break
+
+    print("End of password cracking")
 
 def init(wait=True):
     
 
-
+    #time.sleep(20)
     print("I am in init")
-    passwords=[]
-    passwords=read_password_file()
-    create_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    destination = ("127.0.0.1", 8002)
-    result = create_socket.connect_ex(destination)
-    if result != 0:
-        from test2 import startserver 
-        startserver()
-        print("Port is not open")
-        
-
-   
-    
-    #startse()
-   ## startserver()
-    # corot = startse()
-    # # run the coroutine in an asyncio program
-    # asyncio.run(corot)
     
 
     # coro = testwebsoc()
     # # run the coroutine in an asyncio program
     # asyncio.run(coro) 
+    ports_of_all_nodes = get_ports_of_nodes()
+    node_details = get_details(ports_of_all_nodes)
+    allports=get_node_ports(node_details)
+    allports.remove(port_number)
+    
+    #allports.append(20000)
+    print("All the ndees",allports)
+
+    #create_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    coro2 = good(allports)
+    asyncio.run(coro2)
     
 
-
+    time.sleep(10)
 
 
     if service_register_status == 200:
@@ -150,199 +266,55 @@ def init(wait=True):
         election_ready = ready_for_election(ports_of_all_nodes, bully.election, bully.coordinator)
         if election_ready or not wait:
             print('Starting election in: %s' % node_name)
+            print('coordinator is ss', bully.coordinator)
+
             bully.election = True
             higher_nodes_array = get_higher_nodes(node_details, node_id)
-            print('higher node array', higher_nodes_array)
+            print('higher node array 1', higher_nodes_array)
             if len(higher_nodes_array) == 0:
+                print("I am the leader")
                 bully.coordinator = True
                 bully.election = False
                 announce(node_name)
                 print('Leader is : %s' % node_name)
-                print('**********End of electionsss**********************')
-                
-                #########################
-                # async with websockets.connect('ws://127.0.0.1:8000') as websocket:
-                #     await websocket.send("helloccmmmm")
-                #     response = await websocket.recv()
-                #     print(response)
-                #testwebsoc(node_id)
-                #shedcu ={}
+                print('**********End of electionsss 1**********************')
+
+                #time.sleep(40)  
+                passwords=[]
+                passwords=read_password_file()  
                 shecu=generate_shedule(node_name)
-                print("print array is",shecu)
-                #shedcu = shedcu[0]
-                #node_id = "56"
-                #testwebsoc()
-                # create the custom coroutine
-                # coro = testwebsoc()
-          
-          
-          
-          
-          
-          
-          
-          
-          
-          
-          
-                # # run the coroutine in an asyncio program
-                # asyncio.run(coro)
-                print("aaasamaaaaaaaaaaaaaaaaaaaa")
-
-                
-                # retval=startserver()
-                # print(retval)
-
-                print("I came here")
+                #good()
+                time.sleep(20)
+                print("I came here before create shedule")
                 coro = testwebsoc(shecu,node_name,passwords)
                 # run the coroutine in an asyncio program
-                asyncio.run(coro) 
-                
-
-                #Distribute the shcedule to the nodes
-                ########################workloaddevide(shecu,node_name)
-
-               
-                
+                asyncio.run(coro)
+   
             else:
+                print("Go for a election")
                 election(higher_nodes_array, node_id)
             
     else:
         print('Service registration is not successful')
 
-
-# async def hello():
-#     uri = "ws://localhost:8008"
-#     async with websockets.connect(uri) as websocket:
-#         name = input("What's your name? ")
-
-#         await websocket.send(name)
-#         print(f">>> {name}")
-
-#         greeting = await websocket.recv()
-#         print(f"<<< {greeting}")  
-    
-
-# async def testwebsoc():
-#     abc="hiiii"
-#     response={}
-#     print(":::::::::::::::::",)
-#     #shecu=generate_shedule(node_name)
-    
-#     print(":::::::::::::::::",)
-#     async with websockets.connect('ws://127.0.0.1:8001') as websocket:
-#         await websocket.send(abc)
-#         response = await websocket.recv()
-#         print(response)
-# async def handler(websocket, path):
- 
-#     data = await websocket.recv()
-#     print(data)
-#     # itrdata=int(data)
-#     # #ports_of_all_nodes = get_ports_of_nodes()
-#     # fruits = ["apple", "banana", "cherry"]
-#     # #for x in fruits:
-#     # datax=fruits[itrdata]
-#     reply = f"Data recieved as mmmmmm:  {data}!"
-#     await websocket.send(reply)
-
-# start_server = websockets.serve(handler, "localhost", 8002)
-
-
-# asyncio.get_event_loop().run_until_complete(start_server)
-
-# asyncio.get_event_loop().run_forever()
-
-# async def testwebsoc(shedcu,node_name):
-
-    
-
-#     print("combined array is",shedcu)
-#     all_nodes=[]
-#     all_nodes = get_ports_of_nodes()
-#     print("current all nodes",all_nodes);
-#     print("need to remove id",node_name);
-#     all_nodes.pop(node_name)
-#     print("after remove id",all_nodes);
-
-    ##############################################
-
-    # start_server = websockets.serve(handler, "localhost", 8002)
-
-
-    # asyncio.get_event_loop().run_until_complete(start_server)
-
-    # asyncio.get_event_loop().run_forever()
-
-
-    ##############################################
-    # if(len(all_nodes)>=1):
-    #     print("samaaaaaaaaaaaaaaaaaaaa")
-
-    #     start_server = websockets.serve(Test2.handler, "localhost", 8002)
-
-    #     Test2.asyncio.get_event_loop().run_until_complete(start_server)
-
-    #     Test2.asyncio.get_event_loop().run_forever()
-
-    # else:
-    #     print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
-
-
-
-    # incre=0
-    # for each_node in all_nodes:
-
-    #     data = {
-    #      'conarraycoordinator': shedcu[incre].tolist()
-    #     }
+async def good(allports):
+    print("I came here into async")
+    for each_port in allports:
+        create_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sockport=each_port+3000
+        print("soca is",sockport)
         
-
-    #     #url = 'ws://127.0.0.1:%s/getpassword' % (all_nodes[each_node]+3000)
-    #     url = 'ws://127.0.0.1:%s/' % (all_nodes[each_node]+3000)
-    #     print(url)
-
-        
-
-        # async def testwebsoc():
-        #         async with websockets.connect(url) as websocket:
-        #             fruits = "hiii"
-        #             await websocket.send(str(fruits))
-        #             while True:
-        #                 response = await websocket.recv()
-        #             #print(response)
- 
-        #                 print(response)
-        
-
-
-
-
-
-    ###############################################
-    # i=-1
-    # win = False
-    # while win == False:
-        
-    #         i=i+1
-    #         print(i)
-    #         if(i<=2):
-    #          async with websockets.connect('ws://127.0.0.1:8001') as websocket:
-    #             fruits = shedcu[i]
-    #             await websocket.send(str(fruits))
-    #             response = await websocket.recv()
-    #             #print(response)
-            
-    #             print(response)
-            
-    #         else:
-    #             win=True 
- 
-#asyncio.get_event_loop().run_until_complete(testwebsoc())
-#for x in range(3):
-# coro = testwebsoc()
-#                 # run the coroutine in an asyncio program
-# asyncio.run(coro) 
+        destination = ("127.0.0.1", sockport)
+        result = create_socket.connect_ex(destination)
+        print("echport is....",each_port)
+        if(result!=0):
+            url = 'http://localhost:%s/startserver' % each_port
+            #sendurl=str(url)
+            #url = 'http://localhost:5002/startserver'
+            print("url issss",url)
+            timer_thread1 = threading.Timer(1, init)
+            timer_thread1.start()
+            data= requests.get(url)
 
 # this api is used to exchange details with each node
 @app.route('/nodeDetails', methods=['GET'])
@@ -392,58 +364,52 @@ def announce_found():
     return jsonify({'response': 'OK'}), 200
 
 
-# This API is used to getworkload details.
-@app.route('/destributeworkload', methods=['POST'])
-def workload_devide():
-    print("aaaaaAAAAAAAASSSSSSSSSS I am node 01")
-    data = request.get_json()
-    print(data)
-    print("mmmmmmmmmmmmm")
-    r=6
-    combination=(permutations(data['conarraycoordinator'], r))
+# # This API is used to getworkload details.
+# @app.route('/destributeworkload', methods=['POST'])
+# def workload_devide():
+#     print("aaaaaAAAAAAAASSSSSSSSSS I am node 01")
+#     data = request.get_json()
+#     print(data)
+#     r=6
+#     combination=(permutations(data['conarraycoordinator'], r))
 
-    # print(combination)
-    # print("combi",combination[0])
-    # print("combi",combination[1])
-    # print("combi",combination[2])
+#     # print(combination)
+#     # print("combi",combination[0])
+#     # print("combi",combination[1])
+#     # print("combi",combination[2])
 
-    # for x in combination:
-    #      s = str(x)
-    #      valpass=s.replace(', ', '').replace('(', '').replace(')', '').replace("'", '')
-    #      #print("responce from node 01 is",valpass)
-    # #     #print(valpass)
-    #      #time.sleep(10)
-    #      return jsonify({'response': valpass}), 200
-    dlinks = [] # create empty list to collect results
-    for x in combination:
-        s = str(x)
-        valpass=s.replace(', ', '').replace('(', '').replace(')', '').replace("'", '')
-        dlinks.append(valpass) # add results to the list
-    return jsonify({'response': dlinks}), 200
-    #return dlinks 
+#     # for x in combination:
+#     #      s = str(x)
+#     #      valpass=s.replace(', ', '').replace('(', '').replace(')', '').replace("'", '')
+#     #      #print("responce from node 01 is",valpass)
+#     # #     #print(valpass)
+#     #      #time.sleep(10)
+#     #      return jsonify({'response': valpass}), 200
+#     dlinks = [] # create empty list to collect results
+#     for x in combination:
+#         s = str(x)
+#         valpass=s.replace(', ', '').replace('(', '').replace(')', '').replace("'", '')
+#         dlinks.append(valpass) # add results to the list
+#     return jsonify({'response': dlinks}), 200
+#     #return dlinks 
     
-    #for x in combination:
-        # s = str(x)
-        # valpass=s.replace(', ', '').replace('(', '').replace(')', '').replace("'", '')
-         #print("responce from node 01 is",valpass)
-         #time.sleep(10)
-        # yield [(value[0], key) for key, value in combination]
-         #return jsonify({'response': valpass}), 200
-         #return jsonify({'response': 'Ok'}), 200
-        #print(valpass)
-    # coordinator = data['coordinator']
-    # bully.coordinator = coordinator
-   # print('Coordinator is %s ' % coordinator)
+#     #for x in combination:
+#         # s = str(x)
+#         # valpass=s.replace(', ', '').replace('(', '').replace(')', '').replace("'", '')
+#          #print("responce from node 01 is",valpass)
+#          #time.sleep(10)
+#         # yield [(value[0], key) for key, value in combination]
+#          #return jsonify({'response': valpass}), 200
+#          #return jsonify({'response': 'Ok'}), 200
+#         #print(valpass)
+#     # coordinator = data['coordinator']
+#     # bully.coordinator = coordinator
+#    # print('Coordinator is %s ' % coordinator)
     
-
-'''
-When nodes are sending the election message to the higher nodes, all the requests comes to this proxy. As the init
-method needs to execute only once, it will forward exactly one request to the responseAPI. 
-'''
-
 
 @app.route('/proxy', methods=['POST'])
 def proxy():
+    print("Yes I am here no worries")
     with counter.get_lock():
         counter.value += 1
         unique_count = counter.value

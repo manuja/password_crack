@@ -5,6 +5,8 @@ import numpy as np
 from random import randint
 import asyncio
 import websockets
+import logging, logging.handlers
+import json
 
 # async def test():
 #     print("goooood")
@@ -15,6 +17,12 @@ import websockets
 #         return response
  
 # asyncio.get_event_loop().run_until_complete(test())
+class myHTTPHandler(logging.handlers.HTTPHandler):
+  def mapLogRecord(self,record):
+    #print("record is sss",record)
+    trec={'record':json.dumps(record.__dict__),'filename': json.dumps("sidecar")}
+    #trec={'filename': json.dumps(node_name)}
+    return trec
 
 
 def generate_node_id():
@@ -75,6 +83,12 @@ def get_higher_nodes(node_details, node_id):
             higher_node_array.append(each['port'])
     return higher_node_array
 
+def get_node_ports(node_details):
+    higher_node_array = []
+    for each in node_details:
+        higher_node_array.append(each['port'])
+    return higher_node_array
+
 # this code create shedule for all the nodes
 def generate_shedule(node_id):
     print("ccccccccccccccccccccc",node_id)
@@ -110,14 +124,14 @@ def generate_shedule(node_id):
     for i in values:
         print(i)
         abc['result%s' % i] = np.concatenate((divided_numeric_array[i], divided_simple_array[i],divided_capital_array[i]))
-        print(abc['result%s' % i])
+        #print(abc['result%s' % i])
         onearray[i] = abc['result%s' % i]
    # workloaddevide(onearray,node_id)
     return onearray
 
 # this method is used to share the workload to other nodes.
 def workloaddevide(conarray,node_id):
-    print("combined array is",conarray)
+    #print("combined array is",conarray)
     all_nodes=[]
     all_nodes = get_ports_of_nodes()
     print("current all nodes",all_nodes);
@@ -143,6 +157,22 @@ def workloaddevide(conarray,node_id):
         
         #requests.post(url, json=data)
         response= requests.post(url, json=data)
+        # print("okkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+        # myLogger = logging.getLogger('MTEST')
+        # myLogger.setLevel(logging.DEBUG)
+        # httpHandler = myHTTPHandler('localhost:5009',url='/logDetails',method="POST")
+        # myLogger.addHandler(httpHandler)
+        # myLogger.info("tetx hiiiiii")
+
+
+
+
+
+
+
+
+
+
         #response= await asyncio.run(url)
         #print("retuenssss issss",json.loads(response.text))
         # nodes ={}
@@ -174,8 +204,12 @@ def read_password_file():
     #  for line in f.readlines():
     #      password_array=line
     # print("my array is",password_array[2])
+    # response = requests.get('http://127.0.0.1:5009/getConfigInfo')
+    # passwordfile = json.loads(response.text)
+    passwordfile = "passwordinfo.txt"
+    print("File nameis for password",passwordfile)
 
-    with open('passwordinfo.txt') as f:
+    with open(passwordfile) as f:
         while True:
             line = f.readline()
             if not line:
@@ -186,7 +220,7 @@ def read_password_file():
     return password_array
 
 
-# this method is used to send the higher node id to the proxy
+#this method is used to send the higher node id to the proxy
 def election(higher_nodes_array, node_id):
     status_code_array = []
     for each_port in higher_nodes_array:
@@ -195,9 +229,34 @@ def election(higher_nodes_array, node_id):
             "node_id": node_id
         }
         post_response = requests.post(url, json=data)
+        # myLogger = logging.getLogger('MTEST')
+        # myLogger.setLevel(logging.DEBUG)
+        # httpHandler = myHTTPHandler('localhost:5009',url='/logDetails',method="POST")
+        # myLogger.addHandler(httpHandler)
+        # myLogger.info("tetx hiiiiii")
         status_code_array.append(post_response.status_code)
     if 200 in status_code_array:
         return 200
+
+# def election(higher_nodes_array, node_id):
+#     status_code_array = []
+#     for each_port in higher_nodes_array:
+        
+#         url = 'http://localhost:%s/proxy' % each_port
+#         data = {
+#             "node_id": node_id
+#         }
+#         post_response = requests.post(url, json=data)
+#         # myLogger = logging.getLogger('MTEST')
+#         # myLogger.setLevel(logging.DEBUG)
+#         # httpHandler = myHTTPHandler('localhost:5009',url='/logDetails',method="POST")
+#         # myLogger.addHandler(httpHandler)
+#         # myLogger.info("tetx hiiiiii")
+#         status_code_array.append(post_response.status_code)
+#     if 200 in status_code_array:
+#         return 200
+
+
 
 
 # this method returns if the cluster is ready for the election
@@ -227,6 +286,11 @@ def get_details(ports_of_all_nodes):
     for each_node in ports_of_all_nodes:
         url = 'http://localhost:%s/nodeDetails' % ports_of_all_nodes[each_node]
         data = requests.get(url)
+        # myLogger = logging.getLogger('MTEST')
+        # myLogger.setLevel(logging.DEBUG)
+        # httpHandler = myHTTPHandler('localhost:5009',url='/logDetails',method="POST")
+        # myLogger.addHandler(httpHandler)
+        # myLogger.info(str(data.status_code) + str(data.reason) + " Node details extracted")
         node_details.append(data.json())
     return node_details
 
@@ -245,6 +309,7 @@ def announce(coordinator):
 # this method is to announce all the nodes that password has found. 
 # this method is used to announce that it is the master to the other nodes.
 def broadcastFound(nodefound):
+    print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
     all_nodes = get_ports_of_nodes()
     data = {
         'message': nodefound

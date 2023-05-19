@@ -85,7 +85,7 @@ async def handler(websocket, path):
 
 
 async def testa():
-    async with websockets.serve(handler, "localhost", 8002):
+    async with websockets.serve(handler, "localhost", 8003):
         await asyncio.Future()  # run forever
 
 
